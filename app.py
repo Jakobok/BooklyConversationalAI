@@ -27,7 +27,7 @@ st.markdown('''<style>
 .cover{height:265px;background:#f0eee6;border-radius:5px;display:flex;align-items:center;justify-content:center;margin:10px 0 15px}.cover img{height:232px;max-width:85%;object-fit:contain;box-shadow:5px 7px 12px #243b3233;transition:transform .2s}.cover:hover img{transform:translateY(-5px)}.title{font-family:Georgia,serif;font-size:18px;min-height:46px}.author{color:#7b8075;font-size:12px;margin:5px 0}.price{font-weight:600;margin:10px 0}.tag{font-size:10px;color:#5b7359;text-transform:uppercase;letter-spacing:1px}.footer{border-top:1px solid #dedfd5;margin-top:36px;padding:28px 0;color:#7b8075;font-size:12px}
 div.stButton>button{border-radius:6px;border-color:#cbd3c4;color:#243b32}div.stButton>button[kind="primary"]{background:#243b32;color:white;border:0}
 .st-key-chat_launcher{position:fixed!important;bottom:25px;right:28px;width:175px!important;z-index:999990}.st-key-chat_launcher button{border-radius:30px!important;box-shadow:0 6px 25px #243b3233;padding:14px!important}
-.st-key-chat_panel{position:fixed!important;bottom:88px;right:28px;width:410px!important;max-width:calc(100vw - 28px);background:#fffdf8;border:1px solid #d6ddcf;border-radius:18px;padding:18px;box-shadow:0 15px 65px #182e3430;z-index:999989;max-height:calc(100dvh - 115px);overflow:auto}.st-key-chat_panel [data-testid="stChatMessage"]{background:#f0f3eb;border-radius:12px;padding:10px}.st-key-chat_panel h3{font-size:24px!important}.st-key-chat_panel [data-testid="stChatInput"]{position:static!important}.st-key-chat_panel button{font-size:12px}.st-key-chat_history{max-height:max(130px,calc(100dvh - 380px))!important}
+.st-key-chat_panel{position:fixed!important;bottom:88px;right:28px;width:410px!important;max-width:calc(100vw - 28px);background:#fffdf8;border:1px solid #d6ddcf;border-radius:18px;padding:18px;box-shadow:0 15px 65px #182e3430;z-index:999989;max-height:calc(100dvh - 115px);overflow:auto}.st-key-chat_panel [data-testid="stChatMessage"]{background:#f0f3eb;border-radius:12px;padding:10px}.st-key-chat_panel h3{font-size:24px!important}.st-key-chat_panel [data-testid="stChatInput"]{position:static!important}.st-key-chat_panel button{font-size:12px}
 @media(max-width:750px){.block-container{padding:1rem 1rem 6rem}.hero{padding:28px}.hero h1{font-size:42px}.hero-books,.navlinks{display:none}.benefits{font-size:10px}.st-key-chat_panel{right:14px;bottom:85px}.cover{height:215px}.cover img{height:185px}}
 </style>''', unsafe_allow_html=True)
 
@@ -118,7 +118,7 @@ if st.session_state.chat_open:
         heading.markdown('### Your Bookly assistant')
         close.button('✕', key='close-chat', on_click=toggle_chat, help='Close conversation')
         st.caption('Orders, returns & your next great read')
-        with st.container(height=300, key='chat_history'):
+        with st.container(height=210, key='chat_history'):
             if not agent.messages:
                 with st.chat_message('assistant'):
                     st.write('Hi John! Welcome back. What can I help you with today?')
@@ -146,10 +146,11 @@ if st.session_state.chat_open:
                                     st.caption(f"{b['title']} · ${b['price']:.2f}")
                                     st.button('Add '+b['title'], key=f"rec-{index}-{event_index}-{b['id']}", on_click=add_book, args=(b['id'],))
         if not has_key:
-            st.info('Live chat needs the store API key.')
+            st.caption('Live chat needs the store API key.')
         st.chat_input('Message Bookly…', disabled=not has_key, max_chars=2000, key='chat-message', on_submit=send_message)
         with st.expander('Conversation details'):
             st.caption('Live AI · simulated store tools')
             st.download_button('Download trace', json.dumps(agent.events, indent=2), 'bookly-trace.json')
             for event in reversed(agent.events[-8:]):
                 st.json(event, expanded=False)
+
