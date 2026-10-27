@@ -19,7 +19,7 @@ class Backend:
                        "eta": None, "tracking": "DEMO-TRACK-102",
                        "delivered": str(self.today - timedelta(days=7)),
                        "items": {"HOBBIT": {"title": "The Hobbit", "cents": 1500, "physical": True},
-                                 "DUNE": {"title": "Dune", "cents": 1800, "physical": True}}},
+                                 "1984": {"title": "1984", "cents": 1200, "physical": True}}},
             "BK1003": {"email": "sam@example.com", "status": "delivered",
                        "eta": None, "tracking": "DEMO-TRACK-103",
                        "delivered": str(self.today - timedelta(days=45)),
@@ -35,6 +35,8 @@ class Backend:
         if not order or order["email"].casefold() != email.strip().casefold():
             return {"error": "Order could not be verified. Check order ID and checkout email."}
         return {"order_id": order_id.upper(),
+                "tracking_url": f"?track={order_id.upper()}" if order['tracking'] else None,
+                "tracking_is_simulated": True,
                 "dispatched_at": str(self.today - timedelta(days=2)) if order["status"] == "in_transit" else None,
                 **{k: v for k, v in order.items() if k != "email"}}
 
