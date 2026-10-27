@@ -31,7 +31,7 @@ Never guess order facts. Demo email matching is not real authentication.
 For shipping/arrival questions, provide dispatch date, arrival estimate and the
 tracking link from tracking_url in the SAME answer. Never offer to provide it
 later or ask if they want tracking. Use [Track your package](tracking_url).
-Tracking is a simulated Bookly tracking page, not a real carrier shipment.
+The tracking link opens GLS. Sample parcel references are fictional unless a real one is configured. Never claim GLS has verified the demo shipment. Never include shipping links or unrelated orders in a return/refund reply.
 If an order is still processing with no tracking, explain that tracking is not
 available yet. Estimates are not guarantees.
 Use item IDs from tool results. Never invent a return ID,
@@ -190,21 +190,9 @@ class Agent:
             calls = [item for item in response.output if item.type == "function_call"]
             if not calls:
                 answer = response.output_text or "Could you clarify your request?"
-                # Guarantee useful tracking links even if the model omits them.
-                latest_user = next((m['content'].casefold() for m in reversed(self.messages)
-                                    if m['role'] == 'user'), '')
-                if any(w in latest_user for w in ('arriv', 'track', 'deliver', 'sent', 'ship', 'where', 'status')):
-                    tracked = {}
-                    for event in self.events:
-                        if event.get('turn') != self.turn or event.get('kind') != 'tool':
-                            continue
-                        data = event.get('result', {})
-                        for order in data.get('orders', [data]):
-                            if order.get('tracking_url') and order.get('status') == 'in_transit':
-                                tracked[order['order_id']] = order['tracking_url']
-                    for oid, url in tracked.items():
-                        if url not in answer:
-                            answer += f"\n\n[Track your package · {oid}]({url})"
+                for oid, url in self.tracking_links().items():
+                    if url not in answer:
+                        answer += f"\n\n[Track with GLS · {oid}]({url})"
                 return answer
             for call in calls:
                 try:
@@ -217,6 +205,38 @@ class Agent:
         self.pending = None
         self.event("limit", reason="six model requests reached")
         return "I could not complete this request within the step limit. No action taken. Please retry."
+
+    def tracking_links(self):
+        """Only expose tracking for an explicit shipping request and relevant order."""
+        latest = next((m['content'].casefold() for m in reversed(self.messages)
+                       if m['role'] == 'user'), '')
+        if self.pending or any(w in latest for w in ('return', 'refund', 'damaged', 'broken')):
+            return {}
+        if not any(w in latest for w in ('arriv', 'track', 'deliver', 'sent', 'ship', 'where', 'status')):
+            return {}
+        found = {}
+        for event in self.events:
+            if event.get('turn') != self.turn or event.get('kind') != 'tool':
+                continue
+            data = event.get('result', {})
+            for order in data.get('orders', [data]):
+                if order.get('order_id'):
+                    found[order['order_id']] = order
+        named_ids = {oid for oid in found if oid.casefold() in latest}
+        named_books = {oid for oid, order in found.items() if any(
+            item['title'].casefold() in latest for item in order['items'].values())}
+        selected = named_ids or named_books
+        in_transit = {oid for oid, order in found.items() if order.get('status') == 'in_transit'}
+        if not selected and len(in_transit) == 1:
+            # A specifically named delivered order/book must not fall back to another shipment.
+            if re.search(r'\bbk\d{4}\b', latest):
+                return {}
+            from .catalog import BOOKS
+            if any(b['title'].casefold() in latest for b in BOOKS):
+                return {}
+            selected = in_transit
+        return {oid: found[oid]['tracking_url'] for oid in selected
+                if found[oid].get('tracking_url') and found[oid].get('status') == 'in_transit'}
 
     def mock_reply(self, text):
         """Scripted fallback, explicitly not a simulation of model intelligence."""
