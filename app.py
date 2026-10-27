@@ -11,7 +11,7 @@ load_dotenv()
 st.set_page_config(page_title='Bookly | Your next chapter', page_icon='📚', layout='wide')
 if 'agent' not in st.session_state:
     st.session_state.agent = Agent('live', customer_email='alex@example.com')
-for key, value in [('basket', {}), ('chat_open', False), ('receipt', None)]:
+for key, value in [('basket', {}), ('chat_open', False), ('receipt', None), ('chat_request', None)]:
     if key not in st.session_state:
         st.session_state[key] = value
 agent = st.session_state.agent
@@ -27,7 +27,7 @@ st.markdown('''<style>
 .cover{height:265px;background:#f0eee6;border-radius:5px;display:flex;align-items:center;justify-content:center;margin:10px 0 15px}.cover img{height:232px;max-width:85%;object-fit:contain;box-shadow:5px 7px 12px #243b3233;transition:transform .2s}.cover:hover img{transform:translateY(-5px)}.title{font-family:Georgia,serif;font-size:18px;min-height:46px}.author{color:#7b8075;font-size:12px;margin:5px 0}.price{font-weight:600;margin:10px 0}.tag{font-size:10px;color:#5b7359;text-transform:uppercase;letter-spacing:1px}.footer{border-top:1px solid #dedfd5;margin-top:36px;padding:28px 0;color:#7b8075;font-size:12px}
 div.stButton>button{border-radius:6px;border-color:#cbd3c4;color:#243b32}div.stButton>button[kind="primary"]{background:#243b32;color:white;border:0}
 .st-key-chat_launcher{position:fixed!important;bottom:25px;right:28px;width:175px!important;z-index:999990}.st-key-chat_launcher button{border-radius:30px!important;box-shadow:0 6px 25px #243b3233;padding:14px!important}
-.st-key-chat_panel{position:fixed!important;bottom:88px;right:28px;width:410px!important;max-width:calc(100vw - 28px);background:#fffdf8;border:1px solid #d6ddcf;border-radius:18px;padding:18px;box-shadow:0 15px 65px #182e3430;z-index:999989;max-height:calc(100dvh - 115px);overflow:auto}.st-key-chat_panel [data-testid="stChatMessage"]{background:#f0f3eb;border-radius:12px;padding:10px}.st-key-chat_panel h3{font-size:24px!important}.st-key-chat_panel [data-testid="stChatInput"]{position:static!important}.st-key-chat_panel button{font-size:12px}
+.st-key-chat_panel{position:fixed!important;bottom:88px;right:28px;width:600px!important;max-width:calc(100vw - 28px);background:#fffdf8;border:1px solid #d6ddcf;border-radius:18px;padding:18px;box-shadow:0 15px 65px #182e3430;z-index:999989;max-height:calc(100dvh - 115px);overflow:auto}.st-key-chat_panel [data-testid="stChatMessage"]{background:#f0f3eb;border-radius:12px;padding:10px}.st-key-chat_panel h3{font-size:24px!important}.st-key-chat_panel [data-testid="stChatInput"]{position:static!important}.st-key-chat_panel button{font-size:14px}.st-key-chat_panel [data-testid="stVerticalBlock"]{gap:.65rem}.st-key-chat_history{height:clamp(140px,calc(100dvh - 410px),510px)!important}.st-key-chat_panel [data-testid="stChatMessage"] p{font-size:16px;line-height:1.65}.thinking{display:flex;gap:6px;align-items:center;color:#657664;padding:10px}.thinking i{width:7px;height:7px;background:#7b916c;border-radius:50%;animation:pulse 1.3s infinite}.thinking i:nth-child(2){animation-delay:.2s}.thinking i:nth-child(3){animation-delay:.4s}@keyframes pulse{0%,80%,100%{opacity:.3;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
 @media(max-width:750px){.block-container{padding:1rem 1rem 6rem}.hero{padding:28px}.hero h1{font-size:42px}.hero-books,.navlinks{display:none}.benefits{font-size:10px}.st-key-chat_panel{right:14px;bottom:85px}.cover{height:215px}.cover img{height:185px}}
 </style>''', unsafe_allow_html=True)
 
@@ -39,7 +39,7 @@ def add_book(bid):
 
 def ask(text):
     st.session_state.chat_open = True
-    agent.reply(text)
+    st.session_state.chat_request = text
 
 
 def toggle_chat():
@@ -52,6 +52,19 @@ def send_message():
 
 st.markdown('<div class="strip">GOOD STORIES, DELIVERED · Free shipping on orders over $35</div><div class="nav"><div class="logo">bookly<span style="color:#96a677">.</span></div><div class="navlinks">Books &nbsp; / &nbsp; New discoveries &nbsp; / &nbsp; The reading life</div><div class="account">WELCOME BACK<b>John Doe ◉</b></div></div>', unsafe_allow_html=True)
 st.markdown(f'''<div class="hero"><div><div class="eyebrow">For the love of a good story</div><h1>A good book changes<br>everything.</h1><p>Extraordinary worlds. Unforgettable characters. Find your next can't-put-it-down read, handpicked for curious minds.</p><div class="eyebrow">Your next chapter starts here ↘</div></div><div class="hero-books"><img src="{BOOKS[1]['cover']}" alt="The Hobbit cover"><img src="{BOOKS[0]['cover']}" alt="Dune cover"></div></div><div class="benefits"><span>✧ Thoughtfully curated books</span><span>↗ Free shipping over $35</span><span>↺ 30-day returns</span></div>''', unsafe_allow_html=True)
+tracking_id = st.query_params.get('track')
+if tracking_id:
+    tracked = agent.backend.lookup(tracking_id, agent.customer_email)
+    if 'error' in tracked:
+        st.info('This tracking page is not available for your account.')
+    else:
+        with st.container(border=True):
+            st.subheader(f"Track your package · {tracked['order_id']}")
+            st.write(', '.join(item['title'] for item in tracked['items'].values()))
+            st.write(f"**{tracked['status'].replace('_', ' ').title()}** · Estimated arrival: {tracked['eta'] or 'Delivered'}")
+            st.caption(f"Dispatched: {tracked['dispatched_at'] or 'Not available'} · Tracking reference: {tracked['tracking'] or 'Not assigned'}")
+            st.caption('Simulated Bookly shipment tracking · No live carrier connection')
+
 browse, orders, basket = st.tabs(['Discover books', 'My orders', f"Basket ({sum(st.session_state.basket.values())})"])
 with browse:
     st.subheader('Find a little wonder')
@@ -110,41 +123,73 @@ with basket:
     if st.session_state.receipt:
         st.success(st.session_state.receipt)
 st.markdown('<div class="footer"><b>bookly.</b> &nbsp; A little curiosity goes a long way.<br><br>Fictional bookstore demo · Illustrative prices · No real payments or shipments.<br>Book cover images: Open Library.</div>', unsafe_allow_html=True)
-with st.container(key='chat_launcher'):
-    st.button('Close chat ✕' if st.session_state.chat_open else '✦ Ask Bookly', type='primary', use_container_width=True, on_click=toggle_chat)
-if st.session_state.chat_open:
+def render_messages():
+    if not agent.messages:
+        with st.chat_message('assistant'):
+            st.write('Hi John! Welcome back. What can I help you with today?')
+            for label, query in [('📦 Track my order', 'Where is my order?'), ('↺ Return a book', 'I would like to return a book.'), ('✧ Find my next read', 'What would you recommend based on my purchases?')]:
+                st.button(label, key='quick-'+label, disabled=not has_key, on_click=ask, args=(query,))
+    for index, message in enumerate(agent.messages):
+        with st.chat_message(message['role']):
+            st.write(message['content'])
+            if index == len(agent.messages)-1 and message['role'] == 'assistant':
+                if agent.pending:
+                    p = agent.pending
+                    st.caption(f"Expected refund ${p['amount_cents']/100:.2f} after receipt and inspection.")
+                    yes, no = st.columns(2)
+                    yes.button('Confirm return', key=p['token'], type='primary', on_click=agent.confirm, args=(p['token'],))
+                    no.button('Cancel return', on_click=agent.cancel)
+                latest = [e for e in agent.events if e.get('turn') == agent.turn and e.get('kind') == 'tool']
+                for event_index, event in enumerate(latest):
+                    result = event.get('result', {})
+                    if event.get('name') == 'list_my_orders' and not agent.pending and 'which' in message['content'].casefold():
+                        for order in result.get('orders', []):
+                            oid = order['order_id']
+                            titles = ', '.join(item['title'] for item in order['items'].values())
+                            st.button(f"{titles} · {oid}", key=f'choose-{index}-{event_index}-{oid}', disabled=not has_key, on_click=ask, args=(f'Help me with order {oid}.',))
+                    elif event.get('name') == 'get_recommendations':
+                        for b in result.get('recommendations', []):
+                            st.caption(f"{b['title']} · ${b['price']:.2f}")
+                            st.button('Add '+b['title'], key=f"rec-{index}-{event_index}-{b['id']}", on_click=add_book, args=(b['id'],))
+                tracking_orders = {}
+                for event in latest:
+                    data = event.get('result', {})
+                    for order in data.get('orders', [data]):
+                        if order.get('tracking_url') and order.get('status') == 'in_transit':
+                            tracking_orders[order['order_id']] = order['tracking_url']
+                for oid, url in tracking_orders.items():
+                    st.link_button(f'Track package · {oid}', url)
+
+
+@st.fragment
+def chat_widget():
+    with st.container(key='chat_launcher'):
+        st.button('Close chat ✕' if st.session_state.chat_open else '✦ Ask Bookly', type='primary', use_container_width=True, on_click=toggle_chat)
+    if not st.session_state.chat_open:
+        return
     with st.container(key='chat_panel'):
-        heading, close = st.columns([5, 1])
+        heading, close = st.columns([6, 1])
         heading.markdown('### Your Bookly assistant')
         close.button('✕', key='close-chat', on_click=toggle_chat, help='Close conversation')
-        st.caption('Orders, returns & your next great read')
-        with st.container(height=210, key='chat_history'):
-            if not agent.messages:
-                with st.chat_message('assistant'):
-                    st.write('Hi John! Welcome back. What can I help you with today?')
-                    for label, query in [('📦 Track my order', 'Where is my order?'), ('↺ Return a book', 'I would like to return a book.'), ('✧ Find my next read', 'What would you recommend based on my purchases?')]:
-                        st.button(label, key='quick-'+label, disabled=not has_key, on_click=ask, args=(query,))
-            for index, message in enumerate(agent.messages):
-                with st.chat_message(message['role']):
-                    st.write(message['content'])
-                    if index == len(agent.messages)-1 and message['role'] == 'assistant':
-                        if agent.pending:
-                            p = agent.pending
-                            st.caption(f"Expected refund ${p['amount_cents']/100:.2f} after receipt and inspection.")
-                            yes, no = st.columns(2)
-                            yes.button('Confirm return', key=p['token'], type='primary', on_click=agent.confirm, args=(p['token'],))
-                            no.button('Cancel return', on_click=agent.cancel)
-                        latest = [e for e in agent.events if e.get('turn') == agent.turn and e.get('kind') == 'tool']
-                        for event_index, event in enumerate(latest):
-                            result = event.get('result', {})
-                            if event.get('name') == 'list_my_orders':
-                                for order in result.get('orders', []):
-                                    oid = order['order_id']
-                                    st.button(f"{oid} · {order['status'].replace('_', ' ')}", key=f'choose-{index}-{event_index}-{oid}', disabled=not has_key, on_click=ask, args=(f'Help me with order {oid}.',))
-                            elif event.get('name') == 'get_recommendations':
-                                for b in result.get('recommendations', []):
-                                    st.caption(f"{b['title']} · ${b['price']:.2f}")
-                                    st.button('Add '+b['title'], key=f"rec-{index}-{event_index}-{b['id']}", on_click=add_book, args=(b['id'],))
+        st.caption('Your personal bookseller · Orders, returns & recommendations')
+        with st.container(height=510, key='chat_history'):
+            transcript = st.empty()
+            request = st.session_state.pop('chat_request', None)
+            if request:
+                # Render the customer message and typing indicator BEFORE any API work.
+                with transcript.container():
+                    for message in agent.messages:
+                        with st.chat_message(message['role']):
+                            st.write(message['content'])
+                    with st.chat_message('user'):
+                        st.write(request)
+                    with st.chat_message('assistant'):
+                        st.markdown('<div class="thinking"><i></i><i></i><i></i><span>&nbsp; Bookly is thinking…</span></div>', unsafe_allow_html=True)
+                        with st.spinner('Checking that for you…'):
+                            agent.reply(request)
+                transcript.empty()
+            with transcript.container():
+                render_messages()
         if not has_key:
             st.caption('Live chat needs the store API key.')
         st.chat_input('Message Bookly…', disabled=not has_key, max_chars=2000, key='chat-message', on_submit=send_message)
@@ -154,3 +199,5 @@ if st.session_state.chat_open:
             for event in reversed(agent.events[-8:]):
                 st.json(event, expanded=False)
 
+
+chat_widget()
