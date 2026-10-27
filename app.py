@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 from datetime import timedelta
@@ -7,11 +8,20 @@ from dotenv import load_dotenv
 from bookly.agent import Agent
 from bookly.catalog import BOOKS
 
+def avatar_uri(letter, background, ink):
+    svg = f'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" rx="24" fill="{background}"/><text x="40" y="54" text-anchor="middle" font-family="Georgia,serif" font-size="48" fill="{ink}">{letter}</text></svg>'
+    return 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
+
+
+AVATARS = {'assistant': avatar_uri('b', '#243b32', '#fff9e9'),
+           'user': avatar_uri('J', '#e5e9df', '#243b32')}
+
+
 load_dotenv()
 st.set_page_config(page_title='Bookly | Your next chapter', page_icon='📚', layout='wide')
-if 'agent' not in st.session_state or st.session_state.get('bookly_revision') != 'chat-v3':
+if 'agent' not in st.session_state or st.session_state.get('bookly_revision') != 'chat-v4':
     st.session_state.agent = Agent('live', customer_email='alex@example.com')
-    st.session_state.bookly_revision = 'chat-v3'
+    st.session_state.bookly_revision = 'chat-v4'
 for key, value in [('basket', {}), ('chat_open', False), ('receipt', None), ('chat_request', None)]:
     if key not in st.session_state:
         st.session_state[key] = value
@@ -53,19 +63,6 @@ def send_message():
 
 st.markdown('<div class="strip">GOOD STORIES, DELIVERED · Free shipping on orders over $35</div><div class="nav"><div class="logo">bookly<span style="color:#96a677">.</span></div><div class="navlinks">Books &nbsp; / &nbsp; New discoveries &nbsp; / &nbsp; The reading life</div><div class="account">WELCOME BACK<b>John Doe ◉</b></div></div>', unsafe_allow_html=True)
 st.markdown(f'''<div class="hero"><div><div class="eyebrow">For the love of a good story</div><h1>A good book changes<br>everything.</h1><p>Extraordinary worlds. Unforgettable characters. Find your next can't-put-it-down read, handpicked for curious minds.</p><div class="eyebrow">Your next chapter starts here ↘</div></div><div class="hero-books"><img src="{BOOKS[1]['cover']}" alt="The Hobbit cover"><img src="{BOOKS[0]['cover']}" alt="Dune cover"></div></div><div class="benefits"><span>✧ Thoughtfully curated books</span><span>↗ Free shipping over $35</span><span>↺ 30-day returns</span></div>''', unsafe_allow_html=True)
-tracking_id = st.query_params.get('track')
-if tracking_id:
-    tracked = agent.backend.lookup(tracking_id, agent.customer_email)
-    if 'error' in tracked:
-        st.info('This tracking page is not available for your account.')
-    else:
-        with st.container(border=True):
-            st.subheader(f"Track your package · {tracked['order_id']}")
-            st.write(', '.join(item['title'] for item in tracked['items'].values()))
-            st.write(f"**{tracked['status'].replace('_', ' ').title()}** · Estimated arrival: {tracked['eta'] or 'Delivered'}")
-            st.caption(f"Dispatched: {tracked['dispatched_at'] or 'Not available'} · Tracking reference: {tracked['tracking'] or 'Not assigned'}")
-            st.caption('Simulated Bookly shipment tracking · No live carrier connection')
-
 browse, orders, basket = st.tabs(['Discover books', 'My orders', f"Basket ({sum(st.session_state.basket.values())})"])
 with browse:
     st.subheader('Find a little wonder')
@@ -126,12 +123,13 @@ with basket:
 st.markdown('<div class="footer"><b>bookly.</b> &nbsp; A little curiosity goes a long way.<br><br>Fictional bookstore demo · Illustrative prices · No real payments or shipments.<br>Book cover images: Open Library.</div>', unsafe_allow_html=True)
 def render_messages():
     if not agent.messages:
-        with st.chat_message('assistant'):
+        with st.chat_message('assistant', avatar=AVATARS['assistant']):
             st.write('Hi John! Welcome back. What can I help you with today?')
-            for label, query in [('📦 Track my order', 'Where is my order?'), ('↺ Return a book', 'I would like to return a book.'), ('✧ Find my next read', 'What would you recommend based on my purchases?')]:
+            for label, query in [('Track my order', 'Where is my order?'), ('Return a book', 'I would like to return a book.'), ('Find my next read', 'What would you recommend based on my purchases?')]:
                 st.button(label, key='quick-'+label, disabled=not has_key, on_click=ask, args=(query,))
     for index, message in enumerate(agent.messages):
-        with st.chat_message(message['role']):
+        with st.chat_message(message['role'], avatar=AVATARS[message['role']]):
+            st.caption('BOOKLY' if message['role'] == 'assistant' else 'YOU')
             st.write(message['content'])
             if index == len(agent.messages)-1 and message['role'] == 'assistant':
                 if agent.pending:
@@ -154,14 +152,9 @@ def render_messages():
                             if st.button('Add '+b['title'], key=f"rec-{index}-{event_index}-{b['id']}"):
                                 add_book(b['id'])
                                 st.rerun()  # Refresh the basket after this fast local action.
-                tracking_orders = {}
-                for event in latest:
-                    data = event.get('result', {})
-                    for order in data.get('orders', [data]):
-                        if order.get('tracking_url') and order.get('status') == 'in_transit':
-                            tracking_orders[order['order_id']] = order['tracking_url']
-                for oid, url in tracking_orders.items():
-                    st.link_button(f'Track package · {oid}', url)
+                for oid, url in agent.tracking_links().items():
+                    st.link_button(f'Track with GLS · {oid}', url)
+
 
 
 @st.fragment
@@ -182,11 +175,11 @@ def chat_widget():
                 # Render the customer message and typing indicator BEFORE any API work.
                 with transcript.container():
                     for message in agent.messages:
-                        with st.chat_message(message['role']):
+                        with st.chat_message(message['role'], avatar=AVATARS[message['role']]):
                             st.write(message['content'])
-                    with st.chat_message('user'):
+                    with st.chat_message('user', avatar=AVATARS['user']):
                         st.write(request)
-                    with st.chat_message('assistant'):
+                    with st.chat_message('assistant', avatar=AVATARS['assistant']):
                         st.markdown('<div class="thinking"><i></i><i></i><i></i><span>&nbsp; Bookly is thinking…</span></div>', unsafe_allow_html=True)
                         with st.spinner('Checking that for you…'):
                             agent.reply(request)
@@ -196,12 +189,29 @@ def chat_widget():
         if not has_key:
             st.caption('Live chat needs the store API key.')
         st.chat_input('Message Bookly…', disabled=not has_key, max_chars=2000, key='chat-message', on_submit=send_message)
-        with st.expander('Conversation details'):
-            st.caption('Live AI · simulated store tools')
-            st.download_button('Download trace', json.dumps(agent.events, indent=2), 'bookly-trace.json')
-            for event in reversed(agent.events[-8:]):
-                st.json(event, expanded=False)
+        with st.expander('What Bookly did'):
+            st.caption('A simple activity summary for this conversation')
+            recent = [e for e in agent.events if e.get('turn') == agent.turn]
+            labels = {'list_my_orders': 'Found your orders', 'lookup_order': 'Checked your order details',
+                      'get_recommendations': 'Found books matched to your reading history',
+                      'prepare_return': 'Checked return eligibility — awaiting your confirmation',
+                      'create_return': 'Created your return request — refund follows receipt and inspection'}
+            shown = set()
+            for event in recent:
+                name = event.get('name')
+                if name not in labels or name in shown:
+                    continue
+                shown.add(name)
+                result = event.get('result', {})
+                if 'error' in result:
+                    st.write('• ' + result['error'])
+                elif name == 'prepare_return' and not agent.pending:
+                    st.write('• Checked return eligibility')
+                else:
+                    st.write('• ' + labels[name])
+            if not shown:
+                st.write('No store actions needed yet.')
+
 
 
 chat_widget()
-
