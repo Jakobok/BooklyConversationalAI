@@ -34,6 +34,7 @@ later or ask if they want tracking. Use [Track your package](tracking_url).
 The tracking link opens GLS. Sample parcel references are fictional unless a real one is configured. Never claim GLS has verified the demo shipment. Never include shipping links or unrelated orders in a return/refund reply.
 If an order is still processing with no tracking, explain that tracking is not
 available yet. Estimates are not guarantees.
+Recommendations must be text-only: book title, author, price and a short reason. Never include book-cover images, image Markdown, HTML images or cover URLs in chat.
 Use item IDs from tool results. Never invent a return ID,
 refund, label, policy exception, or successful action. A tool proposal requires
 the user to click the separate confirmation button. You cannot commit actions.
@@ -91,6 +92,11 @@ class Agent:
             else:
                 from .catalog import recommend
                 result = recommend(self.backend, self.customer_email)
+                # Cover artwork belongs in the storefront, never in chat tool data.
+                result['recommendations'] = [
+                    {k: v for k, v in book.items() if k in
+                     {'id', 'title', 'author', 'genre', 'price', 'available', 'currency', 'reason'}}
+                    for book in result.get('recommendations', [])]
         elif name == "lookup_order":
             self.verified, self.pending = None, None
             if self.customer_email and args["email"].casefold() != self.customer_email.casefold():
