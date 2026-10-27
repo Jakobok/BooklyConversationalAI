@@ -1,4 +1,6 @@
 """Mock commerce boundary. All policies are illustrative Bookly assumptions."""
+import os
+from urllib.parse import quote
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -34,8 +36,9 @@ class Backend:
         order = self.orders.get(order_id.upper())
         if not order or order["email"].casefold() != email.strip().casefold():
             return {"error": "Order could not be verified. Check order ID and checkout email."}
+        parcel = os.getenv("BOOKLY_GLS_PARCEL_NUMBER", order["tracking"] or "") if order_id.upper() == "BK1001" else order["tracking"]
         return {"order_id": order_id.upper(),
-                "tracking_url": f"?track={order_id.upper()}" if order['tracking'] else None,
+                "tracking_url": f"https://gls-group.com/DK/en/parcel-tracking/?match={quote(parcel)}" if parcel else None,
                 "tracking_is_simulated": True,
                 "dispatched_at": str(self.today - timedelta(days=2)) if order["status"] == "in_transit" else None,
                 **{k: v for k, v in order.items() if k != "email"}}
