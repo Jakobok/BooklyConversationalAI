@@ -21,7 +21,7 @@ class BooklyTests(unittest.TestCase):
         result = self.a.dispatch('lookup_order', dict(order_id='BK1001', email='alex@example.com'))
         self.assertEqual(result['dispatched_at'], '2026-10-25')
         self.assertEqual(result['eta'], '2026-10-29')
-        self.assertEqual(result['tracking_url'], '?track=BK1001')
+        self.assertTrue(result['tracking_url'].startswith('https://gls-group.com/DK/en/parcel-tracking/?match='))
 
     def test_distinct_purchased_books(self):
         orders = self.a.backend.orders
@@ -57,8 +57,23 @@ class BooklyTests(unittest.TestCase):
                             {'role': 'user', 'content': 'When will Dune arrive?'}]
         self.a.dispatch('lookup_order', dict(order_id='BK1001', email='alex@example.com'))
         answer = self.a.live_reply()
-        self.assertIn('[Track your package · BK1001](?track=BK1001)', answer)
+        self.assertIn('[Track with GLS · BK1001](https://gls-group.com/', answer)
         self.assertEqual(responses.request['input'][0]['content'], 'The Hobbit arrived damaged.')
+
+    def test_return_never_shows_unrelated_shipping_links(self):
+        self.a.messages = [{'role': 'user', 'content': 'Return 1984, it was damaged on arrival'}]
+        self.a.dispatch('list_my_orders', {})
+        self.assertEqual(self.a.tracking_links(), {})
+        self.a.dispatch('prepare_return', dict(order_id='BK1002', item_id='1984', reason='damaged on arrival'))
+        self.assertEqual(self.a.tracking_links(), {})
+
+    def test_tracking_is_scoped_to_requested_order_or_book(self):
+        self.a.dispatch('list_my_orders', {})
+        for request in ('When will 1984 arrive?', 'Delivery status of BK1002?'):
+            self.a.messages = [{'role': 'user', 'content': request}]
+            self.assertEqual(self.a.tracking_links(), {})
+        self.a.messages = [{'role': 'user', 'content': 'Where is Dune?'}]
+        self.assertEqual(set(self.a.tracking_links()), {'BK1001'})
 
     def test_recommendations(self):
         result = self.a.dispatch('get_recommendations', {})
