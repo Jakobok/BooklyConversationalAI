@@ -231,3 +231,5 @@ def chat_widget():
             if not recent:
                 st.write('No tool calls were needed for this reply.')
 
+
+chat_widget()
