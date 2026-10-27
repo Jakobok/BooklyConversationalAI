@@ -21,6 +21,44 @@ class BooklyTests(unittest.TestCase):
         result = self.a.dispatch('lookup_order', dict(order_id='BK1001', email='alex@example.com'))
         self.assertEqual(result['dispatched_at'], '2026-10-25')
         self.assertEqual(result['eta'], '2026-10-29')
+        self.assertEqual(result['tracking_url'], '?track=BK1001')
+
+    def test_distinct_purchased_books(self):
+        orders = self.a.backend.orders
+        self.assertEqual(set(orders['BK1001']['items']), {'DUNE'})
+        self.assertEqual(set(orders['BK1002']['items']), {'HOBBIT', '1984'})
+
+    def test_return_switches_orders_without_reasking_permission(self):
+        self.a.dispatch('lookup_order', dict(order_id='BK1001', email='alex@example.com'))
+        result = self.a.dispatch('prepare_return', dict(order_id='BK1002', item_id='HOBBIT', reason='damaged on arrival'))
+        self.assertTrue(result['requires_confirmation'])
+        self.assertEqual(self.a.pending['reason'], 'damaged on arrival')
+        self.assertEqual(self.a.verified, 'BK1002')
+        self.assertFalse(self.a.backend.returns)
+
+    def test_automatic_return_verification_cannot_access_other_account(self):
+        result = self.a.dispatch('prepare_return', dict(order_id='BK1003', item_id='1984', reason='damaged'))
+        self.assertIn('error', result)
+        self.assertIsNone(self.a.pending)
+        self.assertFalse(self.a.backend.returns)
+
+    def test_live_history_and_tracking_link_fallback(self):
+        from types import SimpleNamespace
+        class Responses:
+            def create(inner, **kwargs):
+                inner.request = kwargs
+                return SimpleNamespace(id='test-response', output=[], usage=None,
+                                       output_text='Dune is arriving on October 29.')
+        responses = Responses()
+        self.a.client = SimpleNamespace(responses=responses)
+        self.a.messages = [{'role': 'user', 'content': 'When will Dune arrive?'}]
+        self.a.api_input = [{'role': 'user', 'content': 'The Hobbit arrived damaged.'},
+                            {'role': 'assistant', 'content': 'I can help with that.'},
+                            {'role': 'user', 'content': 'When will Dune arrive?'}]
+        self.a.dispatch('lookup_order', dict(order_id='BK1001', email='alex@example.com'))
+        answer = self.a.live_reply()
+        self.assertIn('[Track your package · BK1001](?track=BK1001)', answer)
+        self.assertEqual(responses.request['input'][0]['content'], 'The Hobbit arrived damaged.')
 
     def test_recommendations(self):
         result = self.a.dispatch('get_recommendations', {})
