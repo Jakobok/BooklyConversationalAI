@@ -9,8 +9,9 @@ from bookly.catalog import BOOKS
 
 load_dotenv()
 st.set_page_config(page_title='Bookly | Your next chapter', page_icon='📚', layout='wide')
-if 'agent' not in st.session_state:
+if 'agent' not in st.session_state or st.session_state.get('bookly_revision') != 'chat-v3':
     st.session_state.agent = Agent('live', customer_email='alex@example.com')
+    st.session_state.bookly_revision = 'chat-v3'
 for key, value in [('basket', {}), ('chat_open', False), ('receipt', None), ('chat_request', None)]:
     if key not in st.session_state:
         st.session_state[key] = value
@@ -150,7 +151,9 @@ def render_messages():
                     elif event.get('name') == 'get_recommendations':
                         for b in result.get('recommendations', []):
                             st.caption(f"{b['title']} · ${b['price']:.2f}")
-                            st.button('Add '+b['title'], key=f"rec-{index}-{event_index}-{b['id']}", on_click=add_book, args=(b['id'],))
+                            if st.button('Add '+b['title'], key=f"rec-{index}-{event_index}-{b['id']}"):
+                                add_book(b['id'])
+                                st.rerun()  # Refresh the basket after this fast local action.
                 tracking_orders = {}
                 for event in latest:
                     data = event.get('result', {})
@@ -201,3 +204,4 @@ def chat_widget():
 
 
 chat_widget()
+
